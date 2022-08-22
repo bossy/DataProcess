@@ -90,8 +90,7 @@ if DT_TYPE == '5G_DT_Scanner':
 # ================== DT Test End ====================
 
 '''=============================================== SSV ====================================================='''
-''' trace_folder = 'C:\Work\Spark_5G\\NPI\\NewRelease_2021\\5G FDD\Model\\throughput_result' '''
-trace_folder = "C:\Work\Spark_5G\Feilding\Test\SSV\Post_Swap\CFDS\Process"
+trace_folder = "C:\Work\Spark_5G\\NPI\\NewRelease_2021\\5G FDM\Model"
 
 site_list = ['TCEOK', 'TCEMK']
 sector_list = ['S1', 'S3']
