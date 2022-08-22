@@ -1,6 +1,8 @@
 import pandas as pd
 import utm
 import matplotlib.pyplot as plt
+import branca
+
 from matplotlib.backends.backend_pdf import FigureCanvasPdf, PdfPages
 
 from dateutil import parser
@@ -21,6 +23,9 @@ import branca.colormap as cmp
 PLOTS_PER_ROW = 2
 ROWS_PER_PAGE = 3
 
+DT_LOG_TIMESTAMP = 'TIME_STAMP'
+DT_LOG_LAT = 'LAT'
+DT_LOG_LON = 'LON'
 
 def load_data(filename, filetype):
     print("Loading file - " + filename)
@@ -38,12 +43,12 @@ def load_data(filename, filetype):
             # print(xcap_file.columns)
 
             # Check Whether the XCAP export file include timestamp, geo data
-            if {'TIME_STAMP', 'Lon', 'Lat'}.issubset(xcap_file.columns):
+            if {DT_LOG_TIMESTAMP, DT_LOG_LON, DT_LOG_LAT}.issubset(xcap_file.columns):
                 # following code remove the statistics data in the last a few rows of XCAP export file through checking
                 # whether the data type of column 'TIME_STAMP' is datetime.
                 for index, row in xcap_file.iterrows():
 #                    dbg_print(type(row['TIME_STAMP']))
-                    if type(row['TIME_STAMP']) != datetime.datetime and type(row['TIME_STAMP']) != pd._libs.tslibs.timestamps.Timestamp:
+                    if type(row[DT_LOG_TIMESTAMP]) != datetime.datetime and type(row[DT_LOG_TIMESTAMP]) != pd._libs.tslibs.timestamps.Timestamp:
                         xcap_file.drop(axis=0, index=index, inplace=True)
 
                 # return XCAP export as dataframe
@@ -59,25 +64,34 @@ def load_data(filename, filetype):
         exit(1)
 
 
-def write_data_to_excel(filename, tabname, data, columns_2d):
+def write_data_to_excel(filename, tabname, data, kpi_list):
     if path.exists(filename):
         result = pd.ExcelWriter(path=filename, engine="openpyxl", mode='a')
     else:
         result = pd.ExcelWriter(path=filename, engine="openpyxl", mode='w')
 
-    columns = list(chain.from_iterable(columns_2d))
+    kpis = list(chain.from_iterable(kpi_list))
+    final_kpis = []
 
     if 'tracefile' in data.columns:
-        columns.insert(0, 'tracefile')
+        kpis.insert(0, 'tracefile')
 
-    for column in columns:
-        if column not in data.columns:
-            print("Missing KPI: ", column, "in data file")
+    for kpi in kpis:
+        found_kpi = False
+
+        for col in data.columns:
+            if kpi in col:
+                final_kpis.append(col)
+                found_kpi = True
+                break
+
+        if not found_kpi:
+            print("Missing KPI: ", kpi, "in data file")
             exit(1)
 
     print("Writing file - " + filename)
 
-    data.to_excel(result, sheet_name=tabname, columns=columns)
+    data.to_excel(result, sheet_name=tabname, columns=final_kpis)
 
     result.save()
 
@@ -143,8 +157,8 @@ def sample_discrete(dataframe, discrete_parameter, bin, method='mean', curve_dat
 
 
 def sample_spatial_binning(dataframe, bin_size, binningfile=None, method='mean'):
-    longitude = 'Lon'
-    latitude = 'Lat'
+    longitude = DT_LOG_LON
+    latitude = DT_LOG_LAT
 
     dbg_print(' ----- binnning data to '+str(bin_size)+'m x '+str(bin_size)+'m area -----')
 
@@ -192,7 +206,53 @@ def sample_spatial_binning(dataframe, bin_size, binningfile=None, method='mean')
     return binning_dataframe
 
 
-def sample_plot_on_map(dataframe, kpi, geoplotting_datafile, color_set):
+def sample_plot_on_map(kpi_map: folium.Map, dataframe: pd.DataFrame, kpi, geoplotting_datafile, color_set):
+    longitude = 'binned_lon'
+    latitude = 'binned_lat'
+
+    dbg_print(' ----- plotting data to '+kpi+' on map -----')
+
+    if not longitude in dataframe.columns:
+        print("there is no longitude in the dataframe!")
+        return 1
+
+    if not latitude in dataframe.columns:
+        print("there is no latitude in the dataframe!")
+        return 1
+
+    if not kpi in dataframe.columns:
+        print("there is no kpi in dataframe!")
+        return 1
+
+    dbg_print(kpi_map)
+
+    kpi_map.fit_bounds([[dataframe[latitude].min(), dataframe[longitude].min()],
+                        [dataframe[latitude].max(), dataframe[longitude].max()]])
+
+    folium.TileLayer('Stamen Terrain').add_to(kpi_map)
+    folium.TileLayer('CartoDB positron').add_to(kpi_map)
+    #folium.TileLayer('Mapbox Bright').add_to(map)
+    #folium.TileLayer('Cloudmade').add_to(map)
+    #folium.TileLayer('Mapbox').add_to(map)
+    folium.LayerControl().add_to(kpi_map)
+
+    step = cmp.StepColormap(
+        ['yellow', 'green', 'purple'],
+        vmin=-130, vmax=-40,
+        index=[-130, -100, -80, -40],  # for change in the colors, not used fr linear
+        caption='Color Scale for Map'  # Caption for Color scale or Legend
+    )
+
+#    dataframe.apply(lambda row: folium.RegularPolygonMarker(location=[row[latitude], row[longitude]],
+#                                                            `fill=True, fill_color='YlGn', radius=2`).add_to(kpi_map),
+#                    axis=1)
+
+    kpi_map.save(geoplotting_datafile)
+
+    # return map
+
+
+def sample_plot_on_map_to_file(dataframe, kpi, geoplotting_datafile, color_set):
     longitude = 'binned_lon'
     latitude = 'binned_lat'
 
@@ -218,7 +278,7 @@ def sample_plot_on_map(dataframe, kpi, geoplotting_datafile, color_set):
 
     folium.TileLayer('Stamen Terrain').add_to(map)
     folium.TileLayer('CartoDB positron').add_to(map)
-    folium.TileLayer('Mapbox Bright').add_to(map)
+    #folium.TileLayer('Mapbox Bright').add_to(map)
     #folium.TileLayer('Cloudmade').add_to(map)
     #folium.TileLayer('Mapbox').add_to(map)
     folium.LayerControl().add_to(map)
@@ -250,9 +310,10 @@ def plot_ssv_kpi(data, x_axis, kpi_list, timeline, period):
 
     for kpi in kpi_list:
         dbg_print("plot kpi: " + kpi)
-        if not kpi in data.columns:
-            dbg_print(kpi + ' is not in the dataframe')
-            exit(1)
+        for col in data.columns:
+            if not kpi in col:
+                dbg_print(kpi + ' is not in the dataframe')
+                exit(1)
 
         if i % (plots_per_row * rows_of_plots) == 0:
             figure, axes = plt.subplots(rows_of_plots, plots_per_row)
@@ -278,12 +339,6 @@ def plot_dt_kpi_to_pdf(filename, data, x_axis, kpi_list, timeline=None, period=N
     # flatten 2D KPI list to 1D KPI list
     kpis = list(chain.from_iterable(kpi_list))
 
-    for kpi in kpis:
-        if not kpi in data.columns:
-            print(kpi + ' is not in the dataframe')
-            dbg_print(kpi + ' is not in the dataframe')
-            exit(1)
-
     figure, axes = plt.subplots(rows_of_plots, plots_per_row)
 
     if not (timeline is None):
@@ -295,9 +350,23 @@ def plot_dt_kpi_to_pdf(filename, data, x_axis, kpi_list, timeline=None, period=N
             for kpi in kpis:
                 dbg_print("plot kpi: " + kpi)
 
+                # check kpi is included in dataframe
+                found_kpi = False
+                for col in data.columns:
+                    if kpi in col:
+                        found_kpi = True
+                        kpi = col
+                        break
+
+                if not found_kpi:
+                    print(kpi + ' is not in the dataframe')
+                    dbg_print(kpi + ' is not in the dataframe')
+                    exit(1)
+
+                # if pd.api.types.is_number(data[kpi]):
                 dataplot = data.plot.hist(bins=100,
-                    ax=axes[int((i % (plots_per_row * rows_of_plots)) / plots_per_row), (i % plots_per_row)],
-                    y=kpi, title=kpi, figsize=(15, 18))
+                                          ax=axes[int((i % (plots_per_row * rows_of_plots)) / plots_per_row),
+                                                  (i % plots_per_row)], y=kpi, title=kpi, figsize=(15, 18))
 
             if not (timeline is None):
                 dataplot.axvline(timeline, color='red', linestyle='--')
@@ -325,13 +394,24 @@ def statistics_dt_kpi_to_excel(filename, data, kpi_list):
     # flatten 2D KPI list to 1D KPI list
     kpis = list(chain.from_iterable(kpi_list))
 
+    kpis_final = []
+
+    # check kpi is included in dataframe
     for kpi in kpis:
-        if not kpi in data.columns:
+        found_kpi = False
+        for col in data.columns:
+            if kpi in col:
+                found_kpi = True
+                kpis_final.append(col)
+                break
+
+        if not found_kpi:
             print(kpi + ' is not in the dataframe')
             dbg_print(kpi + ' is not in the dataframe')
             exit(1)
 
-    data[kpis].describe(percentiles=[0.05, 0.1, 0.5, 0.9, 0.97]).to_excel(filename)
+    data[kpis_final].describe(percentiles=[0.05, 0.1, 0.5, 0.9, 0.97]).to_excel(filename)
+
 
 def plot_ssv_kpi_to_pdf(filename, data, x_axis, kpi_list, timeline=None, period=None):
     i = 0
@@ -339,15 +419,9 @@ def plot_ssv_kpi_to_pdf(filename, data, x_axis, kpi_list, timeline=None, period=
     plots_per_row = PLOTS_PER_ROW
     rows_of_plots = ROWS_PER_PAGE
 
-    kpis = list(chain.from_iterable(kpi_list))
-
-    for kpi in kpis:
-        if not kpi in data.columns:
-            print(kpi + ' is not in the dataframe')
-            dbg_print(kpi + ' is not in the dataframe')
-            exit(1)
-
+    # figure, axes = plt.subplots(rows_of_plots, plots_per_row)
     figure, axes = plt.subplots(rows_of_plots, plots_per_row)
+    figure.subplots_adjust(hspace=0.8)
 
     if not (timeline is None):
         end_timeline = timeline + datetime.timedelta(0, period)
@@ -356,11 +430,27 @@ def plot_ssv_kpi_to_pdf(filename, data, x_axis, kpi_list, timeline=None, period=
         for kpis in kpi_list:
 
             for kpi in kpis:
+                found_kpi = False
+
                 dbg_print("plot kpi: " + kpi)
 
-                dataplot = data.plot(
-                    ax=axes[int((i % (plots_per_row * rows_of_plots)) / plots_per_row), (i % plots_per_row)],
-                    kind='line', x=x_axis, y=kpi, title=kpi, figsize=(15, 18), marker='.')
+                # check kpi is included in dataframe
+                for col in data.columns:
+                    if kpi in col:
+                        kpi_in_dataframe = col
+                        found_kpi = True
+                        break
+
+                if not found_kpi:
+                    print(kpi + ' is not in the dataframe')
+                    dbg_print(kpi + ' is not in the dataframe')
+                    exit(1)
+
+                if not pd.api.types.is_string_dtype(data[kpi_in_dataframe]):
+                    dataplot = data.plot(ax=axes[int((i % (plots_per_row * rows_of_plots)) / plots_per_row),
+                                                 (i % plots_per_row)], kind='line', x=x_axis, y=kpi_in_dataframe,
+                                         title=kpi, figsize=(15, 15), marker='.')
+                    dataplot.legend(loc='upper center', bbox_to_anchor=(0.5, -0.2), fancybox=True, shadow=True)
 
             if not (timeline is None):
                 dataplot.axvline(timeline, color='red', linestyle='--')
@@ -371,7 +461,8 @@ def plot_ssv_kpi_to_pdf(filename, data, x_axis, kpi_list, timeline=None, period=
             if i % (plots_per_row * rows_of_plots) == 0:
                 pdf.savefig(figure)
                 plt.close('all')
-                figure, axes = plt.subplots(rows_of_plots, plots_per_row)
+                figure, axes = plt.subplots(rows_of_plots, plots_per_row, figsize=(15, 15))
+                figure.subplots_adjust(hspace=0.8)
 
         pdf.savefig(figure)
         plt.close('all')

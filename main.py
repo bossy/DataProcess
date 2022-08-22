@@ -1,429 +1,27 @@
 import os
+import io
 import datetime
+
+import folium
+from folium.plugins import Draw
+import pandas
 import pandas as pd
 import numpy
 
-
+import sys
+from PyQt5.QtCore import Qt, QStringListModel, QAbstractTableModel, QModelIndex, QUrl, QTemporaryFile
+from PyQt5 import QtWidgets
+from PyQt5.QtWidgets import *
 from data_process import *
+from data_structure import *
+
+from PyQt5.QtWebEngineWidgets import QWebEngineView
+from IPython.display import display
+
+# =============== Global =================
+filetype = 'XCAP'
 
 SSV_THROUGHPUT_PERIOD = 60  # seconds
-
-# 5G SSV KPI
-SSV_NR_DL_THROUGHPUT_KPI = '5G-NR RLC Throughput NR-DL RLC DL RLC Throughput [Mbps]'
-SSV_ENDC_DL_THROUGHPUT_KPI = '5G-NR EN-DC RLC Throughput DL RLC Throughput(Total PDU) Total DL RLC Throughput [Mbps]'
-SSV_NR_UL_THROUGHPUT_KPI = '5G-NR RLC Throughput NR-UL RLC UL RLC Throughput [Mbps]'
-SSV_ENDC_UL_THROUGHPUT_KPI = '5G-NR EN-DC RLC Throughput UL RLC Throughput(Total PDU) Total UL RLC Throughput [Mbps]'
-# LTE SSV KPI
-SSV_LTE_DL_THROUGHPUT_KPI = 'LTE KPI RLC DL Throughput [Mbps]'
-#SSV_CA_DL_THROUGHPUT_KPI = 'LTE KPI RLC DL Throughput [Mbps]'
-SSV_CA_DL_THROUGHPUT_KPI = 'LTE KPI PDCP DL Throughput [Mbps]'
-SSV_LTE_UL_THROUGHPUT_KPI = 'LTE KPI RLC UL Throughput [Mbps]'
-SSV_CA_UL_THROUGHPUT_KPI = 'LTE KPI RLC UL Throughput [Mbps]'
-XCAL_TIME_STAMP = 'TIME_STAMP'
-
-nr_ssv_dl_thp_export_list = [['Lon'],
-                             ['Lat'],
-                             ['5G-NR RLC Throughput NR-DL RLC DL RLC Throughput [Mbps]'],
-                             ['5G-NR PCell RF Serving PCI'], ['5G-NR PCell RF NR-ARFCN'],
-                             ['5G-NR PCell RF Serving SS-RSRP [dBm]'], ['5G-NR PCell RF Serving SS-SINR [dB]'],
-                             ['5G-NR PCell Layer1 DL BLER [%]'], ['5G-NR PCell Layer1 DL Layer Num (Avg)'],
-                             ['5G-NR PCell Layer1 DL MCS (Avg)'],
-                             ['Qualcomm 5G-NR MAC PDSCH Info PCell RB Num[Avg]',
-                              'Qualcomm 5G-NR MAC PDSCH Info PCell RB Num[Including 0]']]
-
-nr_ssv_ul_thp_export_list = [['Lon'],
-                             ['Lat'],
-                             ['5G-NR RLC Throughput NR-UL RLC UL RLC Throughput [Mbps]'],
-                             ['5G-NR PCell RF Serving PCI'], ['5G-NR PCell RF NR-ARFCN'], ['5G-NR PCell RF Serving SS-RSRP [dBm]'],
-                             ['5G-NR PCell RF Serving SS-SINR [dB]'], ['5G-NR PCell Layer1 UL BLER [%]'],
-                             ['5G-NR PCell Layer1 UL MCS (Avg)'],
-                             ['5G-NR PCell Layer1 UL RB Num (Including 0)', '5G-NR PCell Layer1 UL RB Num (Avg)'],
-                             ['Qualcomm 5G-NR MAC PUSCH Info PCell Layer Num[Avg]']]
-
-endc_ssv_dl_thp_export_list = [['Lon'],
-                               ['Lat'],
-                               ['5G-NR EN-DC RLC Throughput DL RLC Throughput(Total PDU) Total DL RLC Throughput [Mbps]',
-                                '5G-NR RLC Throughput NR-DL RLC DL RLC Throughput [Mbps]',
-                                'LTE KPI RLC DL Throughput [Mbps]', 'LTE KPI PCell MAC DL Throughput [Mbps]'],
-                               ['5G-NR PCell RF Serving PCI', 'LTE KPI PCell Serving PCI'],
-                               ['5G-NR PCell RF NR-ARFCN'], ['LTE KPI PCell Serving EARFCN(DL)'],
-                               ['5G-NR PCell RF Serving SS-RSRP [dBm]', 'LTE KPI PCell Serving RSRP [dBm]'],
-                               ['5G-NR PCell RF Serving SS-SINR [dB]', 'LTE KPI PCell SINR [dB]'],
-                               ['5G-NR PCell Layer1 DL Layer Num (Avg)', 'LTE KPI PCell WB RI'],
-                               ['5G-NR PCell Layer1 DL MCS (Avg)', 'LTE KPI PCell DL MCS0', 'LTE KPI PCell DL MCS1'],
-                               ['5G-NR PCell Layer1 DL RB Num (Avg)',
-                                'Qualcomm 5G-NR MAC PDSCH Info PCell RB Num[Including 0]',
-                                'LTE KPI PDSCH PRB Number(Avg)(Total)'],
-                               ['5G-NR PCell Layer1 DL BLER [%]', 'LTE KPI PCell PDSCH BLER [%]']]
-
-endc_ssv_ul_thp_export_list = [['Lon'],
-                               ['Lat'],
-                               ['5G-NR EN-DC RLC Throughput UL RLC Throughput(Total PDU) Total UL RLC Throughput [Mbps]',
-                                '5G-NR RLC Throughput NR-UL RLC UL RLC Throughput [Mbps]',
-                                'LTE KPI RLC UL Throughput [Mbps]'],
-                               ['5G-NR PCell RF Serving PCI', 'LTE KPI PCell Serving PCI'],
-                               ['5G-NR PCell RF NR-ARFCN'], ['LTE KPI PCell Serving EARFCN(DL)'],
-                               ['5G-NR PCell RF Serving SS-RSRP [dBm]', 'LTE KPI PCell Serving RSRP [dBm]'],
-                               ['5G-NR PCell RF Serving SS-SINR [dB]', 'LTE KPI PCell SINR [dB]'],
-                               ['5G-NR PCell Layer1 UL MCS (Avg)', 'LTE KPI PCell UL MCS'],
-                               ['5G-NR PCell Layer1 UL RB Num (Avg)', '5G-NR PCell Layer1 UL RB Num (Including 0)',
-                                'LTE KPI PCell PUSCH PRB Number(Including 0)'],
-                               ['5G-NR PCell Layer1 UL BLER [%]', 'LTE KPI PCell PUSCH BLER [%]'],
-                               ['LTE KPI PCell Total Tx Power [dBm]', 'LTE KPI PCell PUSCH Power [dBm]'],
-                               ['Qualcomm 5G-NR MAC PUSCH Info PCell Layer Num[Avg]']]
-
-# lte_ssv_dl_thp_export_list = [['Lon'],
-#                              ['Lat'],
-#                               ['LTE KPI RLC DL Throughput [Mbps]', 'LTE KPI PCell MAC DL Throughput [Mbps]'],
-#                               ['LTE KPI PCell Serving PCI'],
-                               # ['LTE KPI PCell Serving EARFCN(DL)'],
-#                               ['LTE KPI PCell Serving RSRP [dBm]'],
-#                               ['LTE KPI PCell SINR [dB]'],
-#                               ['LTE KPI PCell WB RI'],
-#                               ['LTE KPI PCell DL MCS0', 'LTE KPI PCell DL MCS1'],
-#                               ['LTE KPI PCell PDSCH PRB Number(Avg)'],
-#                               ['LTE KPI PCell PDSCH BLER [%]']]
-
-lte_ssv_dl_thp_export_list = [['Lon'],
-                              ['Lat'],
-                               ['LTE KPI RLC DL Throughput [Mbps]', 'LTE KPI MAC DL Throughput [Mbps]'], #'APP All FWD Throughput (kbps)'],
-                               ['LTE KPI PCell Serving PCI'],
-                               ['LTE KPI PCell Serving EARFCN(DL)'],
-                               ['LTE KPI PCell Serving RSRP [dBm]'],
-                               ['LTE KPI PCell SINR [dB]'],
-                               ['LTE KPI PCell WB RI'],
-                               ['LTE KPI PCell DL MCS0', 'LTE KPI PCell DL MCS1'],
-                               ['LTE KPI PCell PDSCH PRB Number(Avg)', 'LTE KPI PCell PDSCH PRB Number(Including 0)'],
-                               ['LTE KPI PCell PDSCH BLER [%]'],
-                               ['LTE KPI PCell PUSCH BLER [%]'],
-                               ['LTE KPI PCell WB CQI CW0', 'LTE KPI PCell WB CQI CW1']]
-
-lte_ssv_ul_thp_export_list = [['Lon'],
-                               ['Lat'],
-                               ['LTE KPI RLC UL Throughput [Mbps]'], #'APP All RVS Throughput (kbps)'],
-                               ['LTE KPI PCell Serving PCI'],
-                               ['LTE KPI PCell Serving EARFCN(DL)'],
-                               ['LTE KPI PCell Serving RSRP [dBm]'],
-                               ['LTE KPI PCell SINR [dB]'],
-                               ['LTE KPI PCell UL MCS'],
-                               ['LTE KPI PCell PUSCH PRB Number(Avg)', 'LTE KPI PCell PUSCH PRB Number(Including 0)'],
-                               ['LTE KPI PCell PDSCH BLER [%]'],
-                               ['LTE KPI PCell PUSCH BLER [%]'],
-                               ['LTE KPI PCell Total Tx Power [dBm]', 'LTE KPI PCell PUSCH Power [dBm]']]
-                               #['LL1 Uplink Info PCell Path Loss [dB]']]
-
-lte_ssv_ca_dl_thp_export_list = [['Lon'],
-                               ['Lat'],
-                               [#'APP All FWD Throughput (kbps)',
-                                'LTE KPI RLC DL Throughput [Mbps]',
-                                'LTE KPI PCell MAC DL Throughput [Mbps]',
-                                'LTE KPI SCell[1] SCell[1] MAC DL Throughput [Mbps]',
-                                'LTE KPI SCell[2] SCell[2] MAC DL Throughput [Mbps]',
-                                'LTE KPI SCell[3] SCell[3] MAC DL Throughput [Mbps]',
-                                'LTE KPI SCell[4] SCell[4] MAC DL Throughput [Mbps]'],
-                               ['LTE KPI PCell Serving PCI', 'LTE KPI SCell[1] SCell[1] Serving PCI',
-                                'LTE KPI SCell[2] SCell[2] Serving PCI', 'LTE KPI SCell[3] SCell[3] Serving PCI',
-                                'LTE KPI SCell[4] SCell[4] Serving PCI'],
-                               ['LTE KPI PCell Serving EARFCN(DL)',
-                                'LTE KPI SCell[1] SCell[1] Serving EARFCN(DL)',
-                                'LTE KPI SCell[2] SCell[2] Serving EARFCN(DL)', 'LTE KPI SCell[3] SCell[3] Serving EARFCN(DL)',
-                                'LTE KPI SCell[4] SCell[4] Serving EARFCN(DL)'],
-                               ['LTE KPI PCell Serving RSRP [dBm]', 'LTE KPI SCell[1] SCell[1] Serving RSRP [dBm]',
-                                'LTE KPI SCell[2] SCell[2] Serving RSRP [dBm]', 'LTE KPI SCell[3] SCell[3] Serving RSRP [dBm]',
-                                'LTE KPI SCell[4] SCell[4] Serving RSRP [dBm]'],
-                               ['LTE KPI PCell SINR [dB]', 'LTE KPI PCell SINR [dB]', 'LTE KPI SCell[1] SCell[1] SINR [dB]',
-                                'LTE KPI SCell[2] SCell[2] SINR [dB]', 'LTE KPI SCell[3] SCell[3] SINR [dB]',
-                                'LTE KPI SCell[4] SCell[4] SINR [dB]'],
-                               ['LTE KPI PCell WB RI', 'LTE KPI PCell WB RI', 'LTE KPI SCell[1] SCell[1] WB RI',
-                                'LTE KPI SCell[2] SCell[2] WB RI', 'LTE KPI SCell[3] SCell[3] WB RI',
-                                'LTE KPI SCell[4] SCell[4] WB RI'],
-                               ['LTE KPI PCell DL MCS0', 'LTE KPI SCell[1] SCell[1] DL MCS0', 'LTE KPI SCell[2] SCell[2] DL MCS0',
-                                'LTE KPI SCell[3] SCell[3] DL MCS0', 'LTE KPI SCell[4] SCell[4] DL MCS0'],
-                               ['LTE KPI PCell DL MCS1', 'LTE KPI SCell[1] SCell[1] DL MCS1', 'LTE KPI SCell[2] SCell[2] DL MCS1',
-                                'LTE KPI SCell[3] SCell[3] DL MCS1', 'LTE KPI SCell[4] SCell[4] DL MCS1'],
-                               ['LTE KPI PCell PDSCH PRB Number(Avg)', 'LTE KPI SCell[1] SCell[1] PDSCH PRB Number(Avg)',
-                                'LTE KPI SCell[2] SCell[2] PDSCH PRB Number(Avg)', 'LTE KPI SCell[3] SCell[3] PDSCH PRB Number(Avg)',
-                                'LTE KPI SCell[4] SCell[4] PDSCH PRB Number(Avg)'],
-                               ['LTE KPI PCell PDSCH PRB Number(Including 0)', 'LTE KPI SCell[1] SCell[1] PDSCH PRB Number(Including 0)',
-                                'LTE KPI SCell[2] SCell[2] PDSCH PRB Number(Including 0)', 'LTE KPI SCell[3] SCell[3] PDSCH PRB Number(Including 0)',
-                                'LTE KPI SCell[4] SCell[4] PDSCH PRB Number(Including 0)'],
-                               ['LTE KPI PCell PDSCH BLER [%]', 'LTE KPI SCell[1] SCell[1] PDSCH BLER [%]',
-                                'LTE KPI SCell[2] SCell[2] PDSCH BLER [%]', 'LTE KPI SCell[3] SCell[3] PDSCH BLER [%]',
-                                'LTE KPI SCell[4] SCell[4] PDSCH BLER [%]'],
-                               ['LTE KPI PCell WB CQI CW0', 'LTE KPI PCell WB CQI CW1'],
-                               ['LTE KPI SCell[1] SCell[1] WB CQI CW0', 'LTE KPI SCell[1] SCell[1] WB CQI CW1'],
-                               ['LTE KPI SCell[2] SCell[2] WB CQI CW0', 'LTE KPI SCell[2] SCell[2] WB CQI CW1'],
-                               ['LTE KPI SCell[3] SCell[3] WB CQI CW0', 'LTE KPI SCell[3] SCell[3] WB CQI CW1'],
-                               ['LTE KPI SCell[4] SCell[4] WB CQI CW0', 'LTE KPI SCell[4] SCell[4] WB CQI CW1']]
-
-lte_ssv_ca_ul_thp_export_list = [['Lon'],
-                               ['Lat'],
-                               [#'APP All RVS Throughput (kbps)',
-                                'LTE KPI RLC UL Throughput [Mbps]',
-                                'LTE KPI PCell MAC UL Throughput [Mbps]',
-                                'LTE KPI SCell[1] SCell[1] MAC UL Throughput [Mbps]'],
-                               ['LTE KPI PCell Serving EARFCN(DL)',
-                                'LTE KPI SCell[1] SCell[1] Serving EARFCN(DL)'],
-                               ['LTE KPI PCell Serving PCI', 'LTE KPI SCell[1] SCell[1] Serving PCI'],
-                               ['LTE KPI PCell Serving RSRP [dBm]', 'LTE KPI SCell[1] SCell[1] Serving RSRP [dBm]'],
-                               ['LTE KPI PCell SINR [dB]', 'LTE KPI SCell[1] SCell[1] SINR [dB]'],
-                               ['LTE KPI PCell UL MCS', 'LTE KPI SCell[1] SCell[1] UL MCS'],
-                               ['LTE KPI PCell PUSCH PRB Number(Avg)', 'LTE KPI SCell[1] SCell[1] PUSCH PRB Number(Avg)'],
-                               ['LTE KPI PCell PUSCH BLER [%]', 'LTE KPI SCell[1] SCell[1] PUSCH BLER [%]'],
-                               ['LTE KPI PCell Total Tx Power [dBm]', 'LTE KPI SCell[1] SCell[1] Total Tx Power [dBm]'],
-                               ['LTE KPI PCell PUSCH Power [dBm]', 'LTE KPI SCell[1] SCell[1] PUSCH Power [dBm]']]
-
-endc_DT_dl_thp_export_list = [['Lon'],
-                               ['Lat'],
-                               ['5G-NR EN-DC RLC Throughput DL RLC Throughput(Total PDU) Total DL RLC Throughput [Mbps]',
-                                '5G-NR RLC Throughput NR-DL RLC DL RLC Throughput [Mbps]',
-                                'LTE KPI RLC DL Throughput [Mbps]', 'LTE KPI PCell MAC DL Throughput [Mbps]'],
-                               ['5G-NR PCell RF Serving PCI', 'LTE KPI PCell Serving PCI'],
-                               ['5G-NR PCell RF NR-ARFCN'], ['LTE KPI PCell Serving EARFCN(DL)'],
-                               ['5G-NR PCell RF Serving SS-RSRP [dBm]', 'LTE KPI PCell Serving RSRP [dBm]'],
-                               ['5G-NR PCell RF Serving SS-SINR [dB]', 'LTE KPI PCell SINR [dB]'],
-                               ['5G-NR PCell Layer1 DL Layer Num (Avg)', 'LTE KPI PCell WB RI'],
-                               ['5G-NR PCell Layer1 DL MCS (Avg)', 'LTE KPI PCell DL MCS0', 'LTE KPI PCell DL MCS1'],
-                               ['5G-NR PCell Layer1 DL RB Num (Avg)',
-                                '5G-NR MAC PDSCH Info PCell RB Num[Including 0]',
-                                'LTE KPI PDSCH PRB Number(Avg)(Total)'],
-                               ['5G-NR PCell Layer1 DL BLER [%]', 'LTE KPI PCell PDSCH BLER [%]']]
-
-Spark_DT_ENDC_DL_Export_list = [['Lon'], ['Lat'],
-                                ['5G KPI Total Info Layer2 PDCP DL Throughput(+Split Bearer) [Mbps]',
-                                '5G KPI Total Info Layer2 RLC DL Throughput [Mbps]',
-                                '5G KPI Total Info Layer2 MAC DL Throughput [Mbps]',
-                                'LTE KPI MAC DL Throughput [Mbps]'],
-                                ['5G-NR PCell RF Serving PCI', 'LTE KPI PCell Serving PCI'],
-                                ['5G-NR PCell RF Serving SS-RSRP [dBm]', 'LTE KPI PCell Serving RSRP [dBm]'],
-                                ['5G-NR PCell RF Serving SS-SINR [dB]', 'LTE KPI PCell SINR [dB]'],
-                                ['5G-NR PCell RF Serving SS-RSRQ [dB]', 'LTE KPI PCell Serving RSRQ [dB]'],
-                                ['5G-NR PCell RF RI', 'LTE KPI PCell WB RI'],
-                                ['5G-NR PCell Layer1 DL MCS (Avg)', 'LTE KPI PCell DL MCS0', 'LTE KPI PCell DL MCS1'],
-                                ['5G-NR PCell Layer1 DL RB Num (Avg)',
-                                '5G-NR PCell Layer1 DL RB Num (Including 0)',
-                                'LTE KPI PCell PDSCH PRB Number(Avg)'],
-                                ['5G-NR PCell Layer1 DL BLER [%]', 'LTE KPI PCell PDSCH BLER [%]'],
-                              ['5G-NR PCell RF CQI', 'LTE KPI PCell WB CQI CW0', 'LTE KPI PCell WB CQI CW1']]
-
-Spark_DT_ENDC_UL_Export_list = [['Lon'], ['Lat'],
-                                ['5G-NR Total Info Layer2 PDCP UL Throughput(+Split Bearer) [Mbps]',
-                                '5G-NR Total Info Layer2 RLC DL Throughput [Mbps]',
-                                '5G-NR Total Info Layer2 MAC DL Throughput [Mbps]',
-                                'LTE KPI MAC UL Throughput [Mbps]'],
-                                ['5G-NR PCell RF Serving PCI', 'LTE KPI PCell Serving PCI'],
-                                ['5G-NR PCell RF Serving SS-RSRP [dBm]', 'LTE KPI PCell Serving RSRP [dBm]'],
-                                ['5G-NR PCell RF Serving SS-SINR [dB]', 'LTE KPI PCell SINR [dB]'],
-                                ['5G-NR PCell RF Serving SS-RSRQ [dB]', 'LTE KPI PCell Serving RSRQ [dB]'],
-                                ['5G-NR PCell RF PUSCH Power [dBm]', 'LTE KPI PCell PUSCH Power [dBm]',
-                                 'LTE KPI PCell Total Tx Power [dBm]'],
-                                ['5G-NR PCell Layer1 UL MCS (Avg)', 'LTE KPI PCell UL MCS'],
-                                ['5G-NR PCell Layer1 DL RB Num (Avg)',
-                                '5G-NR PCell Layer1 DL RB Num (Including 0)',
-                                'LTE KPI PCell PUSCH PRB Number(Avg)'],
-                                ['5G-NR PCell Layer1 DL BLER [%]', 'LTE KPI PCell PUSCH BLER [%]']]
-
-Spark_DT_NR_DL_Export_list = [['Lon'],
-                               ['Lat'],
-                               ['5G KPI Total Info Layer2 PDCP DL Throughput(+Split Bearer) [Mbps]',
-                                '5G KPI Total Info Layer2 RLC DL Throughput [Mbps]', 'LTE KPI MAC DL Throughput [Mbps]'],
-                               ['5G-NR PCell RF Serving PCI', 'LTE KPI PCell Serving PCI'],
-                               ['5G-NR PCell RF Serving SS-RSRP [dBm]', 'LTE KPI PCell Serving RSRP [dBm]'],
-                               ['5G-NR PCell RF Serving SS-SINR [dB]', 'LTE KPI PCell SINR [dB]'],
-                               ['5G-NR PCell RF Serving SS-RSRQ [dB]', 'LTE KPI PCell Serving RSRQ [dB]'],
-                               ['5G-NR PCell RF RI', 'LTE KPI PCell WB RI'],
-                               ['5G-NR PCell Layer1 DL MCS (Avg)', 'LTE KPI PCell DL MCS0', 'LTE KPI PCell DL MCS1'],
-                               ['5G-NR PCell Layer1 DL RB Num (Avg)',
-                                '5G-NR PCell Layer1 DL RB Num (Including 0)',
-                                'LTE KPI PCell PDSCH PRB Number(Avg)'],
-                               ['5G-NR PCell Layer1 DL BLER [%]', 'LTE KPI PCell PDSCH BLER [%]'],
-                              ['5G-NR PCell RF CQI', 'LTE KPI PCell WB CQI CW0', 'LTE KPI PCell WB CQI CW1']]
-
-Spark_DT_NR_DL_Export_list2 = [['Lon'],
-                               ['Lat'],
-                               ['5G-NR Total Info Layer2 PDCP DL Throughput(+Split Bearer) [Mbps]',
-                                '5G-NR Total Info Layer2 RLC DL Throughput [Mbps]', 'LTE KPI MAC DL Throughput [Mbps]'],
-                               ['5G-NR PCell RF Serving PCI', 'LTE KPI PCell Serving PCI'],
-                               ['5G-NR PCell RF Serving SS-RSRP [dBm]', 'LTE KPI PCell Serving RSRP [dBm]'],
-                               ['5G-NR PCell RF Serving SS-SINR [dB]', 'LTE KPI PCell SINR [dB]'],
-                               ['5G-NR PCell RF Serving SS-RSRQ [dB]', 'LTE KPI PCell Serving RSRQ [dB]'],
-                               ['5G-NR PCell RF RI', 'LTE KPI PCell WB RI'],
-                               ['5G-NR PCell Layer1 DL MCS (Avg)', 'LTE KPI PCell DL MCS0', 'LTE KPI PCell DL MCS1'],
-                               ['5G-NR PCell Layer1 DL RB Num (Avg)',
-                                '5G-NR PCell Layer1 DL RB Num (Including 0)',
-                                'LTE KPI PCell PDSCH PRB Number(Avg)'],
-                               ['5G-NR PCell Layer1 DL BLER [%]', 'LTE KPI PCell PDSCH BLER [%]'],
-                              ['5G-NR PCell RF CQI', 'LTE KPI PCell WB CQI CW0', 'LTE KPI PCell WB CQI CW1']]
-
-Spark_DT_NR_UL_Export_list = [['Lon'],
-                               ['Lat'],
-                               ['5G KPI Total Info Layer2 PDCP UL Throughput(+Split Bearer) [Mbps]',
-                                '5G KPI Total Info Layer2 RLC UL Throughput [Mbps]', 'LTE KPI MAC UL Throughput [Mbps]',
-                                '5G KPI Total Info Layer2 MAC UL Throughput [Mbps]', 'LTE KPI RLC UL Throughput [Mbps]'],
-                               ['5G-NR PCell RF Serving PCI', 'LTE KPI PCell Serving PCI'],
-                               ['5G-NR PCell RF Serving SS-RSRP [dBm]', 'LTE KPI PCell Serving RSRP [dBm]'],
-                               ['5G-NR PCell RF Serving SS-SINR [dB]', 'LTE KPI PCell SINR [dB]'],
-                               ['5G-NR PCell RF Serving SS-RSRQ [dB]', 'LTE KPI PCell Serving RSRQ [dB]'],
-                               ['5G-NR PCell RF PUSCH Power [dBm]', 'LTE KPI PCell PUSCH Power [dBm]', 'LTE KPI PCell Total Tx Power [dBm]'],
-                               ['5G-NR PCell Layer1 UL MCS (Avg)', 'LTE KPI PCell UL MCS'],
-                               ['5G-NR PCell Layer1 UL RB Num (Avg)',
-                                '5G-NR PCell Layer1 UL RB Num (Including 0)',
-                                'LTE KPI PCell PUSCH PRB Number(Avg)'],
-                               ['5G-NR PCell Layer1 UL BLER [%]', 'LTE KPI PCell PDSCH BLER [%]']]
-
-Spark_DT_LTE_DL_Export_list = [['Lon'],
-                               ['Lat'],
-                               ['LTE KPI MAC DL Throughput [Mbps]'],
-                               ['LTE KPI PCell Serving PCI'],
-                               ['LTE KPI PCell Serving RSRP [dBm]'],
-                               ['LTE KPI PCell SINR [dB]'],
-                               ['LTE KPI PCell Serving RSRQ [dB]'],
-                               ['LTE KPI PCell WB RI'],
-                               ['LTE KPI PCell DL MCS0', 'LTE KPI PCell DL MCS1'],
-                               ['LTE KPI PCell PDSCH PRB Number(Avg)'],
-                               ['LTE KPI PCell PDSCH BLER [%]'],
-                               ['LTE KPI PCell WB CQI CW0'],
-                               ['LTE KPI PCell WB CQI CW1']]
-
-Spark_DT_ENDC_DL_Export_list_New = [['Lon'], ['Lat'],
-                                ['5G KPI Total Info Layer2 PDCP DL Throughput(+Split Bearer) [Mbps]',
-                                '5G KPI Total Info Layer2 RLC DL Throughput [Mbps]',
-                                '5G KPI Total Info Layer2 MAC DL Throughput [Mbps]',
-                                'LTE KPI MAC DL Throughput [Mbps]'],
-                                ['5G-NR PCell RF Serving PCI', 'LTE KPI PCell Serving PCI'],
-                                ['5G-NR PCell RF Serving SS-RSRP [dBm]', 'LTE KPI PCell Serving RSRP [dBm]'],
-                                ['5G-NR PCell RF Serving SS-SINR [dB]', 'LTE KPI PCell SINR [dB]'],
-                                ['5G-NR PCell RF Serving SS-RSRQ [dB]', 'LTE KPI PCell Serving RSRQ [dB]'],
-                                ['5G-NR PCell RF RI', 'LTE KPI PCell WB RI'],
-                                ['5G-NR PCell Layer1 DL MCS (Avg)', 'LTE KPI PCell DL MCS0', 'LTE KPI PCell DL MCS1'],
-                                ['5G-NR PCell Layer1 DL RB Num (Avg)',
-                                '5G-NR PCell Layer1 DL RB Num (Including 0)',
-                                'LTE KPI PCell PDSCH PRB Number(Avg)'],
-                                ['5G-NR PCell Layer1 DL BLER [%]', 'LTE KPI PCell PDSCH BLER [%]'],
-                              ['5G-NR PCell RF CQI', 'LTE KPI PCell WB CQI CW0', 'LTE KPI PCell WB CQI CW1']]
-
-Spark_DT_ENDC_DL_Export_list_New2 = [['Lon'], ['Lat'],
-                                ['5G-NR Total Info Layer2 PDCP DL Throughput(+Split Bearer) [Mbps]',
-                                '5G-NR Total Info Layer2 RLC DL Throughput [Mbps]',
-                                '5G-NR Total Info Layer2 MAC DL Throughput [Mbps]',
-                                'LTE KPI MAC DL Throughput [Mbps]'],
-                                ['5G-NR PCell RF Serving PCI', 'LTE KPI PCell Serving PCI'],
-                                ['5G-NR PCell RF Serving SS-RSRP [dBm]', 'LTE KPI PCell Serving RSRP [dBm]'],
-                                ['5G-NR PCell RF Serving SS-SINR [dB]', 'LTE KPI PCell SINR [dB]'],
-                                ['5G-NR PCell RF Serving SS-RSRQ [dB]', 'LTE KPI PCell Serving RSRQ [dB]'],
-                                ['5G-NR PCell RF RI', 'LTE KPI PCell WB RI'],
-                                ['5G-NR PCell Layer1 DL MCS (Avg)', 'LTE KPI PCell DL MCS0', 'LTE KPI PCell DL MCS1'],
-                                ['5G-NR PCell Layer1 DL RB Num (Avg)',
-                                '5G-NR PCell Layer1 DL RB Num (Including 0)',
-                                'LTE KPI PCell PDSCH PRB Number(Avg)'],
-                                ['5G-NR PCell Layer1 DL BLER [%]', 'LTE KPI PCell PDSCH BLER [%]'],
-                              ['5G-NR PCell RF CQI', 'LTE KPI PCell WB CQI CW0', 'LTE KPI PCell WB CQI CW1']]
-
-Spark_DT_Beamforming_DL_Export_list = [['Lon'], ['Lat'],
-                                ['5G-NR Total Info Layer2 PDCP DL Throughput(+Split Bearer) [Mbps]',
-                                '5G-NR Total Info Layer2 RLC DL Throughput [Mbps]',
-                                '5G-NR Total Info Layer2 MAC DL Throughput [Mbps]',
-                                'LTE KPI MAC DL Throughput [Mbps]'],
-                                ['5G-NR PCell RF Serving PCI', 'LTE KPI PCell Serving PCI'],
-                                ['5G-NR PCell RF Serving SS-RSRP [dBm]', '5G-NR PCell RF Best Beam SS-RSRP [dBm]', 'LTE KPI PCell Serving RSRP [dBm]'],
-                                ['5G-NR PCell RF Serving SS-SINR [dB]', '5G-NR PCell RF Best Beam SS-SINR [dBm]', 'LTE KPI PCell SINR [dB]'],
-                                ['5G-NR PCell RF Serving SS-RSRQ [dB]', 'LTE KPI PCell Serving RSRQ [dB]'],
-                                ['5G-NR PCell RF RI', 'LTE KPI PCell WB RI'],
-                                ['5G-NR PCell Layer1 DL MCS (Avg)', 'LTE KPI PCell DL MCS0', 'LTE KPI PCell DL MCS1'],
-                                ['5G-NR PCell Layer1 DL RB Num (Avg)',
-                                '5G-NR PCell Layer1 DL RB Num (Including 0)',
-                                'LTE KPI PCell PDSCH PRB Number(Avg)'],
-                                ['5G-NR PCell Layer1 DL BLER [%]', 'LTE KPI PCell PDSCH BLER [%]'],
-                              ['5G-NR PCell RF CQI', 'LTE KPI PCell WB CQI CW0', 'LTE KPI PCell WB CQI CW1']]
-
-Spark_DT_Beamforming_DL_Export_list_2 = [['Lon'], ['Lat'],
-                                ['5G KPI Total Info Layer2 PDCP DL Throughput(+Split Bearer) [Mbps]',
-                                '5G KPI Total Info Layer2 RLC DL Throughput [Mbps]',
-                                '5G KPI Total Info Layer2 MAC DL Throughput [Mbps]',
-                                'LTE KPI MAC DL Throughput [Mbps]'],
-                                ['5G-NR PCell RF Serving PCI', 'LTE KPI PCell Serving PCI'],
-                                ['5G-NR PCell RF Serving SS-RSRP [dBm]', '5G-NR PCell RF Best Beam SS-RSRP [dBm]', 'LTE KPI PCell Serving RSRP [dBm]'],
-                                ['5G-NR PCell RF Serving SS-SINR [dB]', '5G-NR PCell RF Best Beam SS-SINR [dBm]', 'LTE KPI PCell SINR [dB]'],
-                                ['5G-NR PCell RF Serving SS-RSRQ [dB]', 'LTE KPI PCell Serving RSRQ [dB]'],
-                                ['5G-NR PCell RF RI', 'LTE KPI PCell WB RI'],
-                                ['5G-NR PCell Layer1 DL MCS (Avg)', 'LTE KPI PCell DL MCS0', 'LTE KPI PCell DL MCS1'],
-                                ['5G-NR PCell Layer1 DL RB Num (Avg)',
-                                '5G-NR PCell Layer1 DL RB Num (Including 0)',
-                                'LTE KPI PCell PDSCH PRB Number(Avg)'],
-                                ['5G-NR PCell Layer1 DL BLER [%]', 'LTE KPI PCell PDSCH BLER [%]'],
-                              ['5G-NR PCell RF CQI', 'LTE KPI PCell WB CQI CW0', 'LTE KPI PCell WB CQI CW1']]
-
-Spark_DT_Beamforming_DL_Export_list_2_no_BF = [['Lon'], ['Lat'],
-                                ['5G KPI Total Info Layer2 PDCP DL Throughput(+Split Bearer) [Mbps]',
-                                '5G KPI Total Info Layer2 RLC DL Throughput [Mbps]',
-                                '5G KPI Total Info Layer2 MAC DL Throughput [Mbps]',
-                                'LTE KPI MAC DL Throughput [Mbps]'],
-                                ['5G-NR PCell RF Serving PCI', 'LTE KPI PCell Serving PCI'],
-                                ['5G-NR PCell RF Serving SS-RSRP [dBm]', 'LTE KPI PCell Serving RSRP [dBm]'],
-                                ['5G-NR PCell RF Serving SS-SINR [dB]', 'LTE KPI PCell SINR [dB]'],
-                                ['5G-NR PCell RF Serving SS-RSRQ [dB]', 'LTE KPI PCell Serving RSRQ [dB]'],
-                                ['5G-NR PCell RF RI', 'LTE KPI PCell WB RI'],
-                                ['5G-NR PCell Layer1 DL MCS (Avg)', 'LTE KPI PCell DL MCS0', 'LTE KPI PCell DL MCS1'],
-                                ['5G-NR PCell Layer1 DL RB Num (Avg)',
-                                '5G-NR PCell Layer1 DL RB Num (Including 0)',
-                                'LTE KPI PCell PDSCH PRB Number(Avg)'],
-                                ['5G-NR PCell Layer1 DL BLER [%]', 'LTE KPI PCell PDSCH BLER [%]'],
-                              ['5G-NR PCell RF CQI', 'LTE KPI PCell WB CQI CW0', 'LTE KPI PCell WB CQI CW1']]
-
-Spark_DT_Beamforming_UL_Export_list = [['Lon'], ['Lat'],
-                                ['5G-NR Total Info Layer2 PDCP UL Throughput(+Split Bearer) [Mbps]',
-                                '5G-NR Total Info Layer2 RLC UL Throughput [Mbps]',
-                                '5G-NR Total Info Layer2 MAC UL Throughput [Mbps]',
-                                'LTE KPI MAC UL Throughput [Mbps]'],
-                                ['5G-NR PCell RF Serving PCI', 'LTE KPI PCell Serving PCI'],
-                                ['5G-NR PCell RF Serving SS-RSRP [dBm]', '5G-NR PCell RF Best Beam SS-RSRP [dBm]', 'LTE KPI PCell Serving RSRP [dBm]'],
-                                ['5G-NR PCell RF Serving SS-SINR [dB]', '5G-NR PCell RF Best Beam SS-SINR [dBm]', 'LTE KPI PCell SINR [dB]'],
-                                ['5G-NR PCell RF Serving SS-RSRQ [dB]', 'LTE KPI PCell Serving RSRQ [dB]', 'LTE KPI PCell Serving RSRQ [dB]'],
-                                ['5G-NR PCell RF PUSCH Power [dBm]', 'LTE KPI PCell PUSCH Power [dBm]',
-                                 'LTE KPI PCell Total Tx Power [dBm]'],
-                                ['5G-NR PCell Layer1 UL MCS (Avg)', 'LTE KPI PCell UL MCS'],
-                                ['5G-NR PCell Layer1 UL RB Num (Avg)',
-                                '5G-NR PCell Layer1 UL RB Num (Including 0)',
-                                'LTE KPI PCell PUSCH PRB Number(Avg)'],
-                                ['5G-NR PCell Layer1 UL BLER [%]', 'LTE KPI PCell PUSCH BLER [%]'],
-                                ['5G-NR PCell RF Pathloss [dB]'],
-                                ['PCell Summary Serving Distance']]
-
-Spark_DT_Beamforming_UL_Export_list_2 = [['Lon'], ['Lat'],
-                                ['5G KPI Total Info Layer2 PDCP UL Throughput(+Split Bearer) [Mbps]',
-                                '5G KPI Total Info Layer2 RLC UL Throughput [Mbps]',
-                                '5G KPI Total Info Layer2 MAC UL Throughput [Mbps]',
-                                'LTE KPI MAC UL Throughput [Mbps]'],
-                                ['5G-NR PCell RF Serving PCI', 'LTE KPI PCell Serving PCI'],
-                                ['5G-NR PCell RF Serving SS-RSRP [dBm]', '5G-NR PCell RF Best Beam SS-RSRP [dBm]', 'LTE KPI PCell Serving RSRP [dBm]'],
-                                ['5G-NR PCell RF Serving SS-SINR [dB]', '5G-NR PCell RF Best Beam SS-SINR [dBm]', 'LTE KPI PCell SINR [dB]'],
-                                ['5G-NR PCell RF Serving SS-RSRQ [dB]', 'LTE KPI PCell Serving RSRQ [dB]', 'LTE KPI PCell Serving RSRQ [dB]'],
-                                ['5G-NR PCell RF PUSCH Power [dBm]', 'LTE KPI PCell PUSCH Power [dBm]',
-                                 'LTE KPI PCell Total Tx Power [dBm]'],
-                                ['5G-NR PCell Layer1 UL MCS (Avg)', 'LTE KPI PCell UL MCS'],
-                                ['5G-NR PCell Layer1 UL RB Num (Avg)',
-                                '5G-NR PCell Layer1 UL RB Num (Including 0)',
-                                'LTE KPI PCell PUSCH PRB Number(Avg)'],
-                                ['5G-NR PCell Layer1 UL BLER [%]', 'LTE KPI PCell PUSCH BLER [%]'],
-                                ['5G-NR PCell RF Pathloss [dB]'],
-                                ['PCell Summary Serving Distance']]
-
-Spark_DT_ENDC_UL_Export_list_New = [['Lon'], ['Lat'],
-                                ['5G-NR Total Info Layer2 PDCP UL Throughput(+Split Bearer) [Mbps]',
-                                '5G-NR Total Info Layer2 RLC UL Throughput [Mbps]',
-                                '5G-NR Total Info Layer2 MAC UL Throughput [Mbps]',
-                                'LTE KPI MAC UL Throughput [Mbps]'],
-                                ['5G-NR PCell RF Serving PCI', 'LTE KPI PCell Serving PCI'],
-                                ['5G-NR PCell RF Serving SS-RSRP [dBm]', 'LTE KPI PCell Serving RSRP [dBm]'],
-                                ['5G-NR PCell RF Serving SS-SINR [dB]', 'LTE KPI PCell SINR [dB]'],
-                                ['5G-NR PCell RF Serving SS-RSRQ [dB]', 'LTE KPI PCell Serving RSRQ [dB]'],
-                                ['5G-NR PCell RF PUSCH Power [dBm]', 'LTE KPI PCell PUSCH Power [dBm]',
-                                 'LTE KPI PCell Total Tx Power [dBm]'],
-                                ['5G-NR PCell Layer1 UL MCS (Avg)', 'LTE KPI PCell UL MCS'],
-                                ['5G-NR PCell Layer1 UL RB Num (Avg)',
-                                '5G-NR PCell Layer1 UL RB Num (Including 0)',
-                                'LTE KPI PCell PUSCH PRB Number(Avg)'],
-                                ['5G-NR PCell Layer1 UL BLER [%]', 'LTE KPI PCell PUSCH BLER [%]']]
 
 nr_sinr_bin_size = numpy.arange(-9.5, 30.5, 1)
 nr_rsrp_bin_size = numpy.arange(-130.5, -40.5, 1)
@@ -434,17 +32,20 @@ lte_sinr_bin_size = numpy.arange(-5.5, 30.5, 1)
 lte_rsrp_bin_size = numpy.arange(-124.5, -40.5, 1)
 
 distance_bin_size = numpy.arange(0, 1000, 10)
+# =============== End =================
 
+# ================== DT Test ====================
 DT_TYPE = '4G_DT'
-if DT_TYPE == '4G_DT':
+
 # Drive Test Data Input for Feilding
+if DT_TYPE == '4G_DT':
     SINR_BIN_SIZE = lte_sinr_bin_size
     RSRP_BIN_SIZE = lte_rsrp_bin_size
     SINR_BIN_KPI = 'LTE KPI PCell SINR [dB]'
     RSRP_BIN_KPI = 'LTE KPI PCell Serving RSRP [dBm]'
     AREA_BINNING_SIZE = 20
     STATISTICS_LIST = lte_ssv_dl_thp_export_list
-    dt_trace = "C:\Work\Spark_5G\Dunidin\Field_Test\DN2\\Pre_TC9_CA_DL_PS LONG CALL_KPIs Export_DN2_RSRP Filter.xlsx"
+    dt_trace = "C:\Work\Spark_5G\Dunedin\Field_Test\DN2\\Pre_TC9_CA_DL_PS LONG CALL_KPIs Export_DN2_RSRP Filter.xlsx"
 
 if DT_TYPE == '5G_DT':
 # Drive Test Data Input for 5G20A feature
@@ -466,26 +67,42 @@ if DT_TYPE == '5G_DT':
     STATISTICS_LIST = Spark_DT_Beamforming_DL_Export_list_2_no_BF
     dt_trace = 'C:\Work\Spark_5G\Dunidin\Acceptance\Spark_Golden_Cluster\Palmerston_North_nonBF\DL_NR\\drive9_nr_dl_thp_0ocns_pure_5g.xlsx'
 
+# Drive Test Data Input for 5G20A feature
+if DT_TYPE == '5G_DT_Scanner':
+    SINR_BIN_SIZE = nr_sinr_bin_size
+    RSRP_BIN_SIZE = nr_rsrp_bin_size
+    RSRP_BIN_SIZE_2 = lte_rsrp_bin_size
+    PL_BIN_SIZE = nr_pl_bin_size
+    DISTANCE_BIN_SIZE = distance_bin_size
+    PUSCH_POWER_BIN_SIZE = nr_pusch_power_bin_size
+    SINR_BIN_KPI = 'Top Set Top 1 SSS_CINR [dB]'
+    RSRP_BIN_KPI = 'Top Set Top 1 SSS_RP [dBm]'
+    # RSRP_BIN_KPI_2 = 'LTE KPI PCell Serving RSRP [dBm]'
+    # PL_BIN_KPI = '5G-NR PCell RF Pathloss [dB]'
+    # NR_PUSCH_POWER_BIN_KPI = '5G-NR PCell RF PUSCH Power [dBm]'
+    # DISTANCE_BIN_KPI = 'PCell Summary Serving Distance'
+    AREA_BINNING_SIZE = 10
+    # STATISTICS_LIST = Spark_DT_ENDC_DL_Export_list_New
+    # STATISTICS_LIST = Spark_DT_ENDC_DL_Export_list_New2
+    STATISTICS_LIST = Spark_DT_ENDC_Thick_Scanner
+    dt_trace = 'C:\Work\Spark_5G\Dunidin\Field_Test\DN2_DN4_5G\\DN2&DN4_5G_BAU_DL Sanner beamforming_KPI.xlsx'
 
-filename = "C:\Work\Spark_5G\Golden_Cluster\Test\SSV\\5g\cjas\s2\cjas_s2_dl_endc_2nd_device_info.xlsx"
+# ================== DT Test End ====================
 
+'''=============================================== SSV ====================================================='''
+''' trace_folder = 'C:\Work\Spark_5G\\NPI\\NewRelease_2021\\5G FDD\Model\\throughput_result' '''
 trace_folder = "C:\Work\Spark_5G\Feilding\Test\SSV\Post_Swap\CFDS\Process"
 
-#dt_trace = 'C:\Work\Spark_5G\Golden_Cluster\Test\DriveTest\Report\\5G_dl_long_data_call\Drive4_NR_DL_Long_Data_Call.xlsx'
-
-filetype = 'XCAP'
-
-#site_list = ['cter', 'ckvg', 'cmil', 'clov', 'ctak', 'cpnx', 'cjas', 'cpae']
-#sector_list = ['s1', 's2', 's3']
-#calltype_list = ['5g', 'endc']
-#direction_list = ['dl', 'ul']
-#site_list = ['CFDE', 'CFDS', 'CFET', 'CFLD']
-#site_list = ['CFET']
-site_list = ['CFDE', 'CFDS', 'CFET', 'CFLD']
-sector_list = ['S1', 'S2', 'S3']
-calltype_list = ['L700', 'L1800', 'L2600', 'L2300', 'CA']
-#calltype_list = ['L2600', 'CA']
+site_list = ['TCEOK', 'TCEMK']
+sector_list = ['S1', 'S3']
+calltype_list = ['ENDC']
+# site_list = ['LTE5740']
+# sector_list = ['On', 'Off']
+# calltype_list = ['ENDC', 'LTE']
 direction_list = ['DL', 'UL']
+
+'''=============================================== SSV End ====================================================='''
+
 
 def ssv_kpi_summary(path):
 
@@ -498,11 +115,12 @@ def ssv_kpi_summary(path):
     result_folder = os.path.join(path, 'SSV_Result_' + datetime.datetime.now().strftime("%Y%m%d_%H%M%S"))
     if not os.path.exists(result_folder):
         os.mkdir(result_folder)
-    result_output_file = os.path.join(result_folder, 'SSV_Result.xlsx')
+    result_output_file = os.path.join(result_folder, 'SSV_Result_' +
+                                      datetime.datetime.now().strftime("%Y%m%d_%H%M%S") + '.xlsx')
 
     print('======= Start SSV KPI analysis =======')
 
-    # Create folder for saving result and create final result file
+    # list all trace file
     trace_file_list = os.listdir(path)
 
     # Seperate uplink or downlink test first
@@ -523,38 +141,43 @@ def ssv_kpi_summary(path):
                 if calltype == '5g':
                     export_kpi_list = nr_ssv_ul_thp_export_list
                     searching_kpi_list = SSV_NR_UL_THROUGHPUT_KPI
-                elif calltype == 'endc':
+                elif calltype == 'endc' or calltype == 'ENDC':
                     export_kpi_list = endc_ssv_ul_thp_export_list
                     searching_kpi_list = SSV_ENDC_UL_THROUGHPUT_KPI
-                elif calltype == 'L700' or calltype == 'L1800' or calltype == 'L2600' or calltype == 'L2300':
+                elif calltype == 'L700' or calltype == 'L1800' or calltype == 'L2600' or calltype == 'L2300' \
+                        or calltype == '4g' or calltype == '4G' or calltype == 'LTE':
                     export_kpi_list = lte_ssv_ul_thp_export_list
                     searching_kpi_list = SSV_LTE_UL_THROUGHPUT_KPI
                 elif calltype == 'CA':
                     export_kpi_list = lte_ssv_ca_ul_thp_export_list
                     searching_kpi_list = SSV_CA_UL_THROUGHPUT_KPI
                 else:
-                    dbg_print('wrong calltype')
+                    dbg_print('Wrong calltype')
                     exit(1)
             elif direction == 'dl' or direction == 'DL':
                 if calltype == '5g':
                     export_kpi_list = nr_ssv_dl_thp_export_list
                     searching_kpi_list = SSV_NR_DL_THROUGHPUT_KPI
-                elif calltype == 'endc':
-                    export_kpi_list = endc_ssv_dl_thp_export_list
+                elif calltype == 'endc' or calltype == 'ENDC':
+                    # export_kpi_list = endc_ssv_dl_thp_export_list
+                    export_kpi_list = endc_thick_ssv_dl_thp_export_list
                     searching_kpi_list = SSV_ENDC_DL_THROUGHPUT_KPI
-                elif calltype == 'L700' or calltype == 'L1800' or calltype == 'L2600' or calltype == 'L2300':
-                    export_kpi_list = lte_ssv_dl_thp_export_list
+                elif calltype == 'L700' or calltype == 'L1800' or calltype == 'L2600' or calltype == 'L2300' \
+                        or calltype == '4g' or calltype == '4G' or calltype == 'LTE':
+                    # export_kpi_list = lte_ssv_dl_thp_export_list
+                    export_kpi_list = lte_thick_ssv_dl_thp_export_list
                     searching_kpi_list = SSV_LTE_DL_THROUGHPUT_KPI
                 elif calltype == 'CA':
                     export_kpi_list = lte_ssv_ca_dl_thp_export_list
                     searching_kpi_list = SSV_CA_DL_THROUGHPUT_KPI
                 else:
-                    dbg_print('wrong calltype')
+                    dbg_print('Wrong calltype')
                     exit(1)
             else:
-                dbg_print('wrong direction')
+                dbg_print('Wrong direction')
                 exit(1)
 
+            # Final SSV data to write to excel file
             data_final = pd.DataFrame()
 
             for site in site_list:
@@ -572,11 +195,12 @@ def ssv_kpi_summary(path):
                     for trace_file in sector_matching:
                         print('========== Analyzing Trace: ', trace_file, '==========')
 
+                        # SSV result chart file
                         result_output_file_charts = os.path.join(result_folder,
                                                                  trace_file.split('.')[0] + '_ssv_chart.pdf')
 
+                        # load SSV raw data file
                         data = load_data(os.path.join(path, trace_file), filetype)
-
 
                         if 'APP All FWD Throughput (kbps)' in data.columns:
                             data['APP All FWD Throughput (kbps)'] = data['APP All FWD Throughput (kbps)'].apply(lambda x: x/1000)
@@ -584,26 +208,121 @@ def ssv_kpi_summary(path):
                         if 'APP All FWD Throughput (kbps)' in data.columns:
                             data['APP All RVS Throughput (kbps)'] = data['APP All RVS Throughput (kbps)'].apply(lambda x: x/1000)
 
+                        # filter KPIs which is included in the data file
+                        export_kpi_list_local = []
+
+                        for kpi_group in export_kpi_list:
+                            final_kpi_list = []
+
+                            for kpi in kpi_group:
+                                drop_kpi = True
+
+                                for col in data.columns:
+                                    if kpi in col:
+                                        final_kpi_list.append(kpi)
+                                        # Replace the raw data KPI name with the standard KPI name
+                                        data.rename(columns={col: kpi}, inplace=True)
+                                        drop_kpi = False
+                                        break
+
+                                if drop_kpi:
+                                    print('!!! drop kpi: ', kpi, 'for site: ', site)
+
+                            if final_kpi_list:
+                                export_kpi_list_local.append(final_kpi_list)
+
+                        # find the best average period
                         best_ssv_avg_data, best_ssv_avg_timestamp = calculate_best_avg_ssv_kpi(data, XCAL_TIME_STAMP,
                                                                                                searching_kpi_list,
                                                                                                SSV_THROUGHPUT_PERIOD)
+                        # find the max sample
                         best_ssv_max_data, best_ssv_max_timestamp = calculate_best_avg_ssv_kpi(data, XCAL_TIME_STAMP,
                                                                                                searching_kpi_list,
                                                                                                1)
 
-                        data_all = pd.concat([best_ssv_avg_data.mean().to_frame().transpose(), best_ssv_max_data])
+                        # combine average and max sample
+                        data_all = pd.concat([best_ssv_avg_data.mean().to_frame().transpose().round(decimals=12),
+                                              best_ssv_max_data.round(decimals=12)])
 
                         data_all.insert(loc=0, column='tracefile', value=[trace_file, trace_file])
 
                         data_final = data_final.append(data_all)
 
                         plot_ssv_kpi_to_pdf(result_output_file_charts, data, XCAL_TIME_STAMP,
-                                            export_kpi_list, best_ssv_avg_timestamp, SSV_THROUGHPUT_PERIOD)
+                                            export_kpi_list_local, best_ssv_avg_timestamp, SSV_THROUGHPUT_PERIOD)
 
             if not data_final.empty:
-                write_data_to_excel(result_output_file, tab_name, data_final, export_kpi_list)
+                write_data_to_excel(result_output_file, tab_name, data_final, export_kpi_list_local)
 
 def drive_test_post_process(tracefile):
+    if not os.path.exists(tracefile):
+        print('Trace file does not exist')
+        exit(1)
+
+    data = load_data(tracefile, filetype)
+
+    rsrp_curve_datafile = os.path.join(os.path.dirname(tracefile),
+                                       os.path.basename(tracefile).split('.')[0] + '_rsrp_curve.xlsx')
+    rsrp_curve_datafile_2 = os.path.join(os.path.dirname(tracefile),
+                                         os.path.basename(tracefile).split('.')[0] + '_rsrp_curve_2.xlsx')
+    sinr_curve_datafile = os.path.join(os.path.dirname(tracefile),
+                                       os.path.basename(tracefile).split('.')[0] + '_sinr_curve.xlsx')
+    pl_curve_datafile = os.path.join(os.path.dirname(tracefile),
+                                     os.path.basename(tracefile).split('.')[0] + '_pathloss_curve.xlsx')
+    nr_pusch_power_datafile = os.path.join(os.path.dirname(tracefile),
+                                           os.path.basename(tracefile).split('.')[0] + '_nr_pusch_power_curve.xlsx')
+    distance_datafile = os.path.join(os.path.dirname(tracefile),
+                                     os.path.basename(tracefile).split('.')[0] + '_distance_curve.xlsx')
+    binning_datafile = os.path.join(os.path.dirname(tracefile),
+                                    os.path.basename(tracefile).split('.')[0] + '_binning.xlsx')
+    statistics_datafile = os.path.join(os.path.dirname(tracefile),
+                                       os.path.basename(tracefile).split('.')[0] + '_statistics.xlsx')
+    plot_datafile = os.path.join(os.path.dirname(tracefile),
+                                 os.path.basename(tracefile).split('.')[0] + '_plotting.pdf')
+    geoplotting_datafile = os.path.join(os.path.dirname(tracefile),
+                                        os.path.basename(tracefile).split('.')[0] + '_geoplotting.html')
+
+    # filter KPIs which is included in the data file
+    export_kpi_list_local = []
+
+    for kpi_group in STATISTICS_LIST:
+        final_kpi_list = []
+
+        for kpi in kpi_group:
+            drop_kpi = True
+
+            for col in data.columns:
+                if kpi in col:
+                    final_kpi_list.append(kpi)
+                    # Replace the raw data KPI name with the standard KPI name
+                    data.rename(columns={col: kpi}, inplace=True)
+                    drop_kpi = False
+                    break
+
+            if drop_kpi:
+                print('!!! drop kpi: ', kpi)
+
+        if final_kpi_list:
+            export_kpi_list_local.append(final_kpi_list)
+
+    binning_data = sample_spatial_binning(data, AREA_BINNING_SIZE, binning_datafile, 'median')
+
+    sample_plot_on_map_to_file(binning_data, RSRP_BIN_KPI, geoplotting_datafile, '')
+
+    plot_dt_kpi_to_pdf(plot_datafile, binning_data, XCAL_TIME_STAMP, export_kpi_list_local)
+
+    sample_discrete(binning_data, RSRP_BIN_KPI, RSRP_BIN_SIZE, 'median', rsrp_curve_datafile)
+    sample_discrete(binning_data, SINR_BIN_KPI, SINR_BIN_SIZE, 'median', sinr_curve_datafile)
+    if DT_TYPE == '5G_DT':
+        sample_discrete(binning_data, RSRP_BIN_KPI_2, RSRP_BIN_SIZE_2, 'median', rsrp_curve_datafile_2)
+        sample_discrete(binning_data, PL_BIN_KPI, PL_BIN_SIZE, 'median', pl_curve_datafile)
+        sample_discrete(binning_data, NR_PUSCH_POWER_BIN_KPI, PUSCH_POWER_BIN_SIZE, 'median', nr_pusch_power_datafile)
+        # sample_discrete(binning_data, DISTANCE_BIN_KPI, DISTANCE_BIN_SIZE, 'median', distance_datafile)
+
+    statistics_dt_kpi_to_excel(statistics_datafile, binning_data, export_kpi_list_local)
+
+
+def drive_test_scanner_post_process(tracefile):
     if not os.path.exists(tracefile):
         print('Trace file does not exist')
         exit(1)
@@ -630,11 +349,34 @@ def drive_test_post_process(tracefile):
                                  os.path.basename(tracefile).split('.')[0] + '_plotting.pdf')
     geoplotting_datafile = os.path.join(os.path.dirname(tracefile), os.path.basename(tracefile).split('.')[0] + '_geoplotting.html')
 
+    # filter KPIs which is included in the data file
+    export_kpi_list_local = []
+
+    for kpi_group in STATISTICS_LIST:
+        final_kpi_list = []
+
+        for kpi in kpi_group:
+            drop_kpi = True
+
+            for col in data.columns:
+                if kpi in col:
+                    final_kpi_list.append(kpi)
+                    # Replace the raw data KPI name with the standard KPI name
+                    data.rename(columns={col: kpi}, inplace=True)
+                    drop_kpi = False
+                    break
+
+            if drop_kpi:
+                print('!!! drop kpi: ', kpi)
+
+        if final_kpi_list:
+            export_kpi_list_local.append(final_kpi_list)
+
     binning_data = sample_spatial_binning(data, AREA_BINNING_SIZE, binning_datafile, 'median')
 
     sample_plot_on_map(binning_data, RSRP_BIN_KPI, geoplotting_datafile, '')
 
-    plot_dt_kpi_to_pdf(plot_datafile, binning_data, XCAL_TIME_STAMP, STATISTICS_LIST)
+    plot_dt_kpi_to_pdf(plot_datafile, binning_data, XCAL_TIME_STAMP, export_kpi_list_local)
 
     sample_discrete(binning_data, RSRP_BIN_KPI, RSRP_BIN_SIZE, 'median', rsrp_curve_datafile)
     sample_discrete(binning_data, SINR_BIN_KPI, SINR_BIN_SIZE, 'median', sinr_curve_datafile)
@@ -642,25 +384,384 @@ def drive_test_post_process(tracefile):
         sample_discrete(binning_data, RSRP_BIN_KPI_2, RSRP_BIN_SIZE_2, 'median', rsrp_curve_datafile_2)
         sample_discrete(binning_data, PL_BIN_KPI, PL_BIN_SIZE, 'median', pl_curve_datafile)
         sample_discrete(binning_data, NR_PUSCH_POWER_BIN_KPI, PUSCH_POWER_BIN_SIZE, 'median', nr_pusch_power_datafile)
-        sample_discrete(binning_data, DISTANCE_BIN_KPI, DISTANCE_BIN_SIZE, 'median', distance_datafile)
+        # sample_discrete(binning_data, DISTANCE_BIN_KPI, DISTANCE_BIN_SIZE, 'median', distance_datafile)
 
-    statistics_dt_kpi_to_excel(statistics_datafile, binning_data, STATISTICS_LIST)
+    statistics_dt_kpi_to_excel(statistics_datafile, binning_data, export_kpi_list_local)
+
+def show_message_box(text, message_type):
+    msg = QMessageBox()
+
+    if message_type == "Question":
+        msg.setIcon(QMessageBox.Question)
+        msg.setWindowTitle("Question")
+    elif message_type == "Warning":
+        msg.setIcon(QMessageBox.Warning)
+        msg.setWindowTitle("Warning")
+    elif message_type == "Critical":
+        msg.setIcon(QMessageBox.Critical)
+        msg.setWindowTitle("Critical")
+    else: # "Information"
+        msg.setIcon(QMessageBox.Information)
+        msg.setWindowTitle("Information")
+
+    msg.setText(text)
+    # msg.setInformativeText("This is additional information")
+    # msg.setDetailedText("The details are as follows:")
+    # msg.setStandardButtons(QMessageBox.Ok | QMessageBox.Cancel)
+
+    msg.exec_()
+
+
+class DataProcessMainWindow(QMainWindow):
+    """Main Window."""
+    def __init__(self, parent=None):
+        """Initializer."""
+        super().__init__(parent)
+
+        self.dt_data = {}
+        self.kpi_map = folium.Map(location=[45.5236, -122.6750], zoom_start=13)
+
+        # syt self.fileList = QStringListModel()
+        self.fileList = QListWidget()
+        self.setWindowTitle("Data Processing")
+        self.resize(1200, 800)
+        self.centralWidget = QLabel("Hello, World")
+        self.centralWidget.setAlignment(Qt.AlignHCenter | Qt.AlignVCenter)
+        self.setCentralWidget(self.centralWidget)
+
+        self._create_actions()
+        self._create_menu_bar()
+        self._create_widget()
+        self._connect_actions()
+
+    def _create_actions(self):
+        # Creating action using the first constructor
+        self.importAction = QAction(self)
+        self.importAction.setText("&Import...")
+        # Creating actions using the second constructor
+        self.exportAction = QAction("E&xport...", self)
+        self.exitAction = QAction("&Exit", self)
+        self.copyAction = QAction("&Copy", self)
+        self.pasteAction = QAction("&Paste", self)
+        self.cutAction = QAction("C&ut", self)
+        self.helpContentAction = QAction("&Help Content", self)
+        self.aboutAction = QAction("&About", self)
+
+    def _create_menu_bar(self):
+        menu_bar = QMenuBar(self)
+        self.setMenuBar(menu_bar)
+        # Creating menus using a QMenu object
+        file_menu = QMenu("&File", self)
+        menu_bar.addMenu(file_menu)
+        # Creating menus using a title
+        edit_menu = menu_bar.addMenu("&Edit")
+        help_menu = menu_bar.addMenu("&Help")
+        # file_menu.addMenu("&Import...")
+        # file_menu.addMenu("&Exit")
+
+        file_menu.addAction(self.importAction)
+        file_menu.addAction(self.exportAction)
+        file_menu.addAction(self.exitAction)
+
+    def _connect_actions(self):
+        # Connect File actions
+        self.importAction.triggered.connect(self.import_data)
+        self.exportAction.triggered.connect(self.export_data)
+
+        self.fileList.clicked.connect(self.data_list_item_change)
+        self.map_web_view_kpi_list.clicked.connect(self.update_map_kpi)
+        # self.fileList.currentItemChanged.connect(self.data_list_item_change)
+
+    def _create_widget(self):
+        self.vLayout = QVBoxLayout()
+        self.dock = QDockWidget("Data List", self)
+        self.dock.setWidget(self.fileList)
+        self.addDockWidget(Qt.TopDockWidgetArea, self.dock)
+
+        self.tabWidget = QTabWidget(self.centralWidget)
+        # self.vLayout.addWidget(self.tabWidget)
+        # self.setLayout(self.vLayout)
+
+        """ Create all data tabs """
+        self.tabWidget.setLayoutDirection(Qt.LeftToRight)
+        self.tabWidget.setElideMode(Qt.ElideRight)
+        self.tabWidget.setTabsClosable(False)
+        self.tabWidget.setMovable(True)
+        self.tabWidget.setObjectName("TabWidget")
+        self.rawDataTab = QtWidgets.QWidget()
+        self.rawDataTab.setObjectName("Raw Data")
+        self.binnedDataTab = QtWidgets.QWidget()
+        self.binnedDataTab.setObjectName("Binned Data")
+        self.discreteDataTab = QtWidgets.QWidget()
+        self.discreteDataTab.setObjectName("Discrete Data")
+        self.mapDataTab = QtWidgets.QWidget()
+        self.mapDataTab.setObjectName("Map Data")
+        self.tabWidget.addTab(self.rawDataTab, "Raw Data")
+        self.tabWidget.addTab(self.binnedDataTab, "Binned Data")
+        self.tabWidget.addTab(self.discreteDataTab, "Discrete Data")
+        self.tabWidget.addTab(self.mapDataTab, "Map Data")
+
+        """ Create table view on raw data tab """
+        self.raw_data_table = QTableView()
+        self.raw_data_table_statistics = QTableView()
+
+        self.raw_data_v_layout = QVBoxLayout()
+        self.raw_data_v_layout.addWidget(self.raw_data_table)
+        self.raw_data_v_layout.addWidget(self.raw_data_table_statistics)
+        self.raw_data_v_layout.setStretchFactor(self.raw_data_table, 3)
+        self.raw_data_v_layout.setStretchFactor(self.raw_data_table_statistics, 1)
+        self.rawDataTab.setLayout(self.raw_data_v_layout)
+
+        """ Create table view on binned data tab """
+        self.binned_data_table = QTableView()
+        self.binned_data_table_statistics = QTableView()
+
+        self.binned_data_v_layout = QVBoxLayout()
+        self.binned_data_v_layout.addWidget(self.binned_data_table)
+        self.binned_data_v_layout.addWidget(self.binned_data_table_statistics)
+        self.binned_data_v_layout.setStretchFactor(self.binned_data_table, 3)
+        self.binned_data_v_layout.setStretchFactor(self.binned_data_table_statistics, 1)
+        self.binnedDataTab.setLayout(self.binned_data_v_layout)
+
+        """ Create map view on map data tab """
+        self.map_web_view = QWebEngineView()
+        self.map_web_view_kpi_list = QListWidget()
+        self.map_data_h_layout = QHBoxLayout()
+        self.map_data_h_layout.addWidget(self.map_web_view_kpi_list)
+        self.map_data_h_layout.addWidget(self.map_web_view)
+        self.map_data_h_layout.setStretchFactor(self.map_web_view_kpi_list, 1)
+        self.map_data_h_layout.setStretchFactor(self.map_web_view, 3)
+        self.mapDataTab.setLayout(self.map_data_h_layout)
+
+        self.setCentralWidget(self.tabWidget)
+
+    def data_list_item_change(self):
+        file_name = self.fileList.currentItem().text()
+        print("1. file name is: ", file_name)
+
+        self.update_data_view(file_name)
+
+    def update_data_view(self, file_name):
+        print("test")
+        if file_name is None:
+            return
+
+        else:
+            print("file name is: ", type(file_name))
+
+            """ Load data on raw data table """
+            pandas_model = PandasModel(self.dt_data[file_name][0])
+            self.raw_data_table.setModel(pandas_model)
+            data_statistics = self.dt_data[file_name][0].describe(percentiles=[0.05, 0.1, 0.5, 0.9, 0.97])
+            pandas_model_statistics = PandasModel(data_statistics)
+            self.raw_data_table_statistics.setModel(pandas_model_statistics)
+            del pandas_model, pandas_model_statistics
+
+            """ Load data on binned data table """
+            pandas_model = PandasModel(self.dt_data[file_name][1])
+            self.binned_data_table.setModel(pandas_model)
+            data_statistics = self.dt_data[file_name][1].describe(percentiles=[0.05, 0.1, 0.5, 0.9, 0.97])
+            pandas_model_statistics = PandasModel(data_statistics)
+            self.binned_data_table_statistics.setModel(pandas_model_statistics)
+            del pandas_model, pandas_model_statistics
+
+            """ Load data on binned data table """
+            geoplotting_datafile = os.path.join(os.path.dirname(file_name),
+                                                os.path.basename(file_name).split('.')[0] + '_geoplotting.html')
+
+            self.map_web_view_kpi_list.addItems(self.dt_data[file_name][1].columns)
+            # self.kpi_map = folium.Map(location=[45.5236, -122.6750], zoom_start=13)
+            # sample_plot_on_map(self.kpi_map, self.dt_data[file_name][1], RSRP_BIN_KPI, geoplotting_datafile, '')
+
+            # point_layer = folium.FeatureGroup(name="Query Search")
+
+            for i, v in self.dt_data[file_name][1].iterrows():
+                """
+                folium.CircleMarker(location=[v['binned_lat'], v['binned_lon']],
+                                    radius=1,
+                                    # tooltip=popup,
+                                    color='#FFBA00',
+                                    fill_color='#FFBA00',
+                                    fill=True).add_to(self.kpi_map)"""
+                """
+                self.kpi_map.add_child(folium.CircleMarker(location=[v['binned_lat'], v['binned_lon']],
+                                                           radius=1,
+                                                           # tooltip=popup,
+                                                           color='#FFBA00',
+                                                           fill_color='#FFBA00',
+                                                           fill=True))"""
+                """
+                point_layer.add_child(folium.CircleMarker(location=[v['binned_lat'], v['binned_lon']],
+                                                          radius=1,
+                                                          # tooltip=popup,
+                                                          color='#FFBA00',
+                                                          fill_color='#FFBA00',
+                                                          fill=True)).add_to(self.kpi_map)
+                self.kpi_map.add_child(point_layer)"""
+                print(v['binned_lat'], v['binned_lon'])
+
+            folium.LayerControl(collapsed=False).add_to(self.kpi_map)
+            self.kpi_map.fit_bounds([[self.dt_data[file_name][1]['binned_lat'].min(),
+                                      self.dt_data[file_name][1]['binned_lon'].min()],
+                                     [self.dt_data[file_name][1]['binned_lat'].max(),
+                                      self.dt_data[file_name][1]['binned_lon'].max()]])
+
+            self.kpi_map.save(geoplotting_datafile)
+
+            # self.map_web_view.load(QUrl("file:///"+geoplotting_datafile))
+            # m = folium.Map(location=[45.5236, -122.6750], tiles="Stamen Toner", zoom_start=13)
+            # m = folium.Map(location=[45.5236, -122.6750], zoom_start=13)
+
+            data = io.BytesIO()
+            self.kpi_map.save(data, close_file=False)
+
+            self.map_web_view.setHtml(data.getvalue().decode())
+
+            print("done")
+
+    def update_map_kpi(self):
+        file_name = self.fileList.currentItem().text()
+        print("1. file name is: ", file_name)
+
+        map_kpi = self.map_web_view_kpi_list.currentItem().text()
+        print("2. map kpi is: ", map_kpi)
+
+        point_layer = folium.FeatureGroup(name="Query Search")
+        for i, v in self.dt_data[file_name][1].iterrows():
+            folium.RegularPolygonMarker(location=[v['binned_lat'], v['binned_lon']],
+                                        radius=4,
+                                        # tooltip=popup,
+                                        color='blue',
+                                        fill_color='blue',
+                                        fill=True).add_to(self.kpi_map)
+            """point_layer.add_child(folium.RegularPolygonMarker(location=[v['binned_lat'], v['binned_lon']],
+                                                      radius=1,
+                                                      # tooltip=popup,
+                                                      color='#FFBA00',
+                                                      fill_color='#FFBA00',
+                                                      fill=True))
+        self.kpi_map.add_child(point_layer)"""
+        folium.LayerControl(collapsed=False).add_to(self.kpi_map)
+
+        tmp_file = QTemporaryFile("XXXXXX.html", self)
+        if tmp_file.open():
+            self.kpi_map.save(tmp_file.fileName())
+            url = QUrl.fromLocalFile(tmp_file.fileName())
+            self.map_web_view.load(url)
+
+    def import_data(self):
+        """ Logic for opening an existing file goes here...
+        self.centralWidget.setText("<b>File > Import...</b> clicked")"""
+        self.open_filename_dialog()
+
+    def export_data(self):
+        """  Logic for opening an existing file goes here...
+        self.centralWidget.setText("<b>File > Export...</b> clicked")"""
+        pass
+
+    def open_filename_dialog(self):
+        options = QFileDialog.Options()
+        options |= QFileDialog.DontUseNativeDialog
+        file_name, _ = QFileDialog.getOpenFileName(self, "QFileDialog.getOpenFileName()", "",
+                                                   "All Files (*);;Python Files (*.py)", options=options)
+        if file_name:
+            if not self.fileList.findItems(file_name, Qt.MatchExactly):
+                item = QListWidgetItem(file_name)
+                self.fileList.addItem(item)
+                self.fileList.setCurrentItem(item)
+
+                print("onOpenExistingProject: ", self.fileList.currentItem().text())
+
+                raw_data = load_data(file_name, filetype)
+                binned_data = sample_spatial_binning(raw_data, AREA_BINNING_SIZE, None, 'mean')
+
+                self.dt_data[file_name] = [raw_data, binned_data]
+
+                self.update_data_view(file_name)
+
+            else:
+                show_message_box(file_name + " has been loaded.", "Information")
+
+
+class PandasModel(QAbstractTableModel):
+
+    """A model to interface a Qt view with pandas dataframe """
+
+    def __init__(self, dataframe: pd.DataFrame, parent=None):
+        QAbstractTableModel.__init__(self, parent)
+        self._dataframe = dataframe
+
+    def rowCount(self, parent=QModelIndex()) -> int:
+        """ Override method from QAbstractTableModel
+
+        Return row count of the pandas DataFrame
+        """
+        if parent == QModelIndex():
+            return len(self._dataframe)
+
+        return 0
+
+    def columnCount(self, parent=QModelIndex()) -> int:
+        """Override method from QAbstractTableModel
+
+        Return column count of the pandas DataFrame
+        """
+        if parent == QModelIndex():
+            return len(self._dataframe.columns)
+        return 0
+
+    def data(self, index: QModelIndex, role=Qt.ItemDataRole):
+        """Override method from QAbstractTableModel
+
+        Return data cell from the pandas DataFrame
+        """
+        if not index.isValid():
+            return None
+
+        if role == Qt.DisplayRole:
+            return str(self._dataframe.iloc[index.row(), index.column()])
+
+        return None
+
+    def headerData(
+        self, section: int, orientation: Qt.Orientation, role: Qt.ItemDataRole
+    ):
+        """Override method from QAbstractTableModel
+
+        Return dataframe index as vertical header data and columns as horizontal header data.
+        """
+        if role == Qt.DisplayRole:
+            if orientation == Qt.Horizontal:
+                return str(self._dataframe.columns[section])
+
+            if orientation == Qt.Vertical:
+                return str(self._dataframe.index[section])
+
+        return None
+
 
 if __name__ == '__main__':
 
-    # best_ssv_avg_data, best_ssv_avg_timestamp = calculate_best_avg_ssv_kpi(data, XCAL_TIME_STAMP, SSV_DL_THROUGHPUT_KPI,
+    # best_ssv_avg_data, best_ssv_avg_timestamp = calculate_best_avg_ssv_kpi(data, XCAL_TIME_STAMP,
+    # SSV_DL_THROUGHPUT_KPI,
     #                                                                       SSV_THROUGHPUT_PERIOD)
 
-    #best_ssv_max_data, best_ssv_max_timestamp = calculate_best_avg_ssv_kpi(data, XCAL_TIME_STAMP, SSV_DL_THROUGHPUT_KPI,
+    # best_ssv_max_data, best_ssv_max_timestamp = calculate_best_avg_ssv_kpi(data, XCAL_TIME_STAMP,
+    # SSV_DL_THROUGHPUT_KPI,
     #                                                                       1)
 
-    #data_all = pd.concat([best_ssv_avg_data.mean().to_frame().transpose(), best_ssv_max_data])
-    #write_data_to_excel(result_output_file, 'Result', data_all, endc_ssv_dl_thp_export_list)
+    # data_all = pd.concat([best_ssv_avg_data.mean().to_frame().transpose(), best_ssv_max_data])
+    # write_data_to_excel(result_output_file, 'Result', data_all, endc_ssv_dl_thp_export_list)
 
-    #plot_ssv_kpi_to_pdf(result_output_file_charts, data, XCAL_TIME_STAMP, endc_ssv_dl_thp_export_list, best_ssv_avg_timestamp, SSV_THROUGHPUT_PERIOD)
-    #ssv_kpi_summary(trace_folder)
+    # plot_ssv_kpi_to_pdf(result_output_file_charts, data, XCAL_TIME_STAMP, endc_ssv_dl_thp_export_list,
+    # best_ssv_avg_timestamp, SSV_THROUGHPUT_PERIOD)
+    # ssv_kpi_summary(trace_folder)
 
-    drive_test_post_process(dt_trace)
+    app = QApplication(sys.argv)
+    win = DataProcessMainWindow()
+    win.show()
+    sys.exit(app.exec_())
+    # drive_test_post_process(dt_trace)
 
 
 
