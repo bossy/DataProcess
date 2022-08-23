@@ -90,15 +90,15 @@ if DT_TYPE == '5G_DT_Scanner':
 # ================== DT Test End ====================
 
 '''=============================================== SSV ====================================================='''
-trace_folder = "C:\Work\Spark_5G\\NPI\\NewRelease_2021\\5G FDM\Model"
+trace_folder = "C:\Work\Spark_5G\\NPI\\NewRelease_2021\\4G_Uplink_performance\Model\Log"
 
-site_list = ['TCEOK', 'TCEMK']
-sector_list = ['S1', 'S3']
-calltype_list = ['ENDC']
+site_list = ['TCEMJ']
+sector_list = ['S1']
+calltype_list = ['ENDC', '4G']
 # site_list = ['LTE5740']
 # sector_list = ['On', 'Off']
 # calltype_list = ['ENDC', 'LTE']
-direction_list = ['DL', 'UL']
+direction_list = ['UL']
 
 '''=============================================== SSV End ====================================================='''
 
@@ -741,26 +741,14 @@ class PandasModel(QAbstractTableModel):
 
 if __name__ == '__main__':
 
-    # best_ssv_avg_data, best_ssv_avg_timestamp = calculate_best_avg_ssv_kpi(data, XCAL_TIME_STAMP,
-    # SSV_DL_THROUGHPUT_KPI,
-    #                                                                       SSV_THROUGHPUT_PERIOD)
-
-    # best_ssv_max_data, best_ssv_max_timestamp = calculate_best_avg_ssv_kpi(data, XCAL_TIME_STAMP,
-    # SSV_DL_THROUGHPUT_KPI,
-    #                                                                       1)
-
-    # data_all = pd.concat([best_ssv_avg_data.mean().to_frame().transpose(), best_ssv_max_data])
-    # write_data_to_excel(result_output_file, 'Result', data_all, endc_ssv_dl_thp_export_list)
-
-    # plot_ssv_kpi_to_pdf(result_output_file_charts, data, XCAL_TIME_STAMP, endc_ssv_dl_thp_export_list,
-    # best_ssv_avg_timestamp, SSV_THROUGHPUT_PERIOD)
-    # ssv_kpi_summary(trace_folder)
-
     app = QApplication(sys.argv)
     win = DataProcessMainWindow()
     win.show()
+
+    ssv_kpi_summary(trace_folder)
+
     sys.exit(app.exec_())
-    # drive_test_post_process(dt_trace)
+
 
 
 
